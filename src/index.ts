@@ -2,19 +2,74 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { serveStatic } from 'hono/cloudflare-workers';
 import type { Env, EmailRequest, EmailRecipient } from './types';
 import { Database } from './database';
 import { Storage } from './storage';
 import { EmailService } from './email';
+import { Validator } from './validation';
 
 const app = new Hono<{ Bindings: Env }>();
 
 // Enable CORS
 app.use('/*', cors());
 
-// Serve static files from public directory
-app.get('/', serveStatic({ path: './index.html', root: './public' }));
+// Serve the Web UI
+app.get('/', async (c) => {
+  // In production, you would serve the HTML file from the worker's assets
+  // For now, redirect to a simple status page
+  return c.html(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Cloudflare Email Worker</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          margin: 0;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+        }
+        .container {
+          text-align: center;
+          padding: 40px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+          backdrop-filter: blur(10px);
+        }
+        h1 { margin-bottom: 20px; }
+        .links { margin-top: 30px; }
+        a {
+          display: inline-block;
+          margin: 10px;
+          padding: 10px 20px;
+          background: white;
+          color: #667eea;
+          text-decoration: none;
+          border-radius: 5px;
+          font-weight: bold;
+        }
+        a:hover { background: #f0f0f0; }
+        .status { margin-top: 20px; color: #a0ffa0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>📧 Cloudflare Email Worker</h1>
+        <p>Email sending system with mailing lists, rich text, and R2 storage</p>
+        <div class="status">✅ API is running</div>
+        <div class="links">
+          <a href="/api">API Status</a>
+          <a href="https://github.com/wolfsilver/cloudflareEmail">Documentation</a>
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
+});
 
 // API health check endpoint
 app.get('/api', (c) => {
@@ -22,6 +77,26 @@ app.get('/api', (c) => {
     status: 'ok',
     message: 'Cloudflare Email Worker API',
     version: '1.0.0',
+    endpoints: {
+      email: {
+        send: 'POST /api/send',
+        sendToList: 'POST /api/send-to-list/:listId'
+      },
+      lists: {
+        getAll: 'GET /api/lists',
+        getOne: 'GET /api/lists/:id',
+        create: 'POST /api/lists',
+        update: 'PUT /api/lists/:id',
+        delete: 'DELETE /api/lists/:id',
+        addEmail: 'POST /api/lists/:id/emails',
+        removeEmail: 'DELETE /api/lists/:id/emails/:email'
+      },
+      files: {
+        upload: 'POST /api/files',
+        get: 'GET /api/files/:id/:filename',
+        delete: 'DELETE /api/files/:id/:filename'
+      }
+    }
   });
 });
 
@@ -71,8 +146,19 @@ app.post('/api/lists', async (c) => {
       return c.json({ success: false, error: 'Name is required' }, 400);
     }
 
+    if (!Validator.validateListName(name)) {
+      return c.json({ success: false, error: 'Invalid list name' }, 400);
+    }
+
+    if (description && !Validator.validateDescription(description)) {
+      return c.json({ success: false, error: 'Description too long' }, 400);
+    }
+
     const db = new Database(c.env.DB);
-    const list = await db.createMailingList(name, description);
+    const list = await db.createMailingList(
+      Validator.sanitizeInput(name),
+      description ? Validator.sanitizeInput(description) : undefined
+    );
     return c.json({ success: true, list }, 201);
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
@@ -162,6 +248,19 @@ app.post('/api/files', async (c) => {
       return c.json({ success: false, error: 'No file provided' }, 400);
     }
 
+    // Validate file
+    if (!Validator.validateFileName(file.name)) {
+      return c.json({ success: false, error: 'Invalid file name' }, 400);
+    }
+
+    if (!Validator.validateFileSize(file.size)) {
+      return c.json({ success: false, error: 'File too large (max 25MB)' }, 400);
+    }
+
+    if (!Validator.isValidMimeType(file.type)) {
+      return c.json({ success: false, error: 'Invalid file type' }, 400);
+    }
+
     const storage = new Storage(c.env.EMAIL_ATTACHMENTS);
     const arrayBuffer = await file.arrayBuffer();
     const uploadedFile = await storage.uploadFile(arrayBuffer, file.name, file.type);
@@ -222,11 +321,29 @@ app.post('/api/send', async (c) => {
       return c.json({ success: false, error: 'Email body is required' }, 400);
     }
 
+    // Validate content
+    if (!Validator.validateSubject(request.subject)) {
+      return c.json({ success: false, error: 'Invalid subject' }, 400);
+    }
+
+    if (request.htmlBody && !Validator.validateHTMLContent(request.htmlBody)) {
+      return c.json({ success: false, error: 'Invalid HTML content' }, 400);
+    }
+
+    if (!Validator.validateRecipientCount(request.to.length)) {
+      return c.json({ success: false, error: 'Too many recipients (max 100)' }, 400);
+    }
+
     const emailService = new EmailService(c.env.SEB);
 
     // Validate email addresses
     if (!emailService.validateRecipients(request.to)) {
       return c.json({ success: false, error: 'Invalid email address(es)' }, 400);
+    }
+
+    // Sanitize HTML content
+    if (request.htmlBody) {
+      request.htmlBody = Validator.sanitizeHTML(request.htmlBody);
     }
 
     // If mailing list is specified, get emails from list
