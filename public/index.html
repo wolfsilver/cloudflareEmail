@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare Email Worker - 邮件发送系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #ff6b35;
+            border-bottom-color: #ff6b35;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .rich-editor {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-height: 300px;
+        }
+
+        .editor-toolbar {
+            background: #f8f8f8;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            border-radius: 4px 4px 0 0;
+        }
+
+        .editor-toolbar button {
+            padding: 6px 12px;
+            margin-right: 5px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .editor-toolbar button:hover {
+            background: #e8e8e8;
+        }
+
+        .editor-content {
+            padding: 15px;
+            min-height: 250px;
+            outline: none;
+        }
+
+        .file-upload {
+            border: 2px dashed #ddd;
+            border-radius: 4px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-upload:hover {
+            border-color: #ff6b35;
+            background: #fff8f6;
+        }
+
+        .file-upload input {
+            display: none;
+        }
+
+        .file-list {
+            margin-top: 10px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+
+        .file-item button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            background: #ff6b35;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #e55a2b;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .list-item {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .list-item-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .list-item-actions button {
+            padding: 6px 15px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .btn-edit {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
+        }
+
+        .notification.success {
+            background: #28a745;
+        }
+
+        .notification.error {
+            background: #dc3545;
+        }
+
+        .notification.show {
+            display: block;
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .recipients-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .recipients-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .recipient-tag {
+            background: #e3f2fd;
+            padding: 5px 10px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .recipient-tag button {
+            background: none;
+            border: none;
+            color: #1976d2;
+            cursor: pointer;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📧 Cloudflare Email Worker</h1>
+        <p class="subtitle">基于 Cloudflare Workers 的邮件发送系统</p>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('compose')">发送邮件</button>
+            <button class="tab" onclick="switchTab('lists')">邮件列表</button>
+            <button class="tab" onclick="switchTab('files')">文件管理</button>
+        </div>
+
+        <!-- Compose Email Tab -->
+        <div id="compose" class="tab-content active">
+            <h2>✉️ 编写邮件</h2>
+            
+            <div class="form-group">
+                <label>使用邮件列表（可选）</label>
+                <select id="mailingListSelect" onchange="loadListRecipients()">
+                    <option value="">-- 选择邮件列表或手动输入收件人 --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>收件人</label>
+                <div class="recipients-input">
+                    <input type="email" id="recipientEmail" placeholder="输入邮箱地址">
+                    <button class="btn btn-secondary" onclick="addRecipient()">添加</button>
+                </div>
+                <div class="recipients-list" id="recipientsList"></div>
+            </div>
+
+            <div class="form-group">
+                <label>主题</label>
+                <input type="text" id="subject" placeholder="邮件主题">
+            </div>
+
+            <div class="form-group">
+                <label>发件人（可选）</label>
+                <input type="email" id="fromEmail" placeholder="sender@example.com">
+            </div>
+
+            <div class="form-group">
+                <label>邮件内容</label>
+                <div class="rich-editor">
+                    <div class="editor-toolbar">
+                        <button onclick="formatText('bold')"><b>B</b></button>
+                        <button onclick="formatText('italic')"><i>I</i></button>
+                        <button onclick="formatText('underline')"><u>U</u></button>
+                        <button onclick="formatText('insertOrderedList')">1. 列表</button>
+                        <button onclick="formatText('insertUnorderedList')">• 列表</button>
+                        <button onclick="insertImage()">🖼️ 插入图片</button>
+                    </div>
+                    <div id="editor" class="editor-content" contenteditable="true"></div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>附件</label>
+                <div class="file-upload" onclick="document.getElementById('attachmentInput').click()">
+                    <p>📎 点击或拖拽文件到此处上传</p>
+                    <input type="file" id="attachmentInput" multiple onchange="handleFileUpload(event)">
+                </div>
+                <div class="file-list" id="attachmentsList"></div>
+            </div>
+
+            <button class="btn" onclick="sendEmail()">发送邮件</button>
+        </div>
+
+        <!-- Mailing Lists Tab -->
+        <div id="lists" class="tab-content">
+            <h2>📋 邮件列表管理</h2>
+            
+            <div class="form-group">
+                <label>创建新列表</label>
+                <input type="text" id="newListName" placeholder="列表名称">
+                <textarea id="newListDesc" placeholder="列表描述（可选）"></textarea>
+                <button class="btn" onclick="createList()">创建列表</button>
+            </div>
+
+            <hr style="margin: 30px 0;">
+
+            <h3>现有列表</h3>
+            <div id="mailingListsContainer"></div>
+        </div>
+
+        <!-- Files Tab -->
+        <div id="files" class="tab-content">
+            <h2>📁 文件管理</h2>
+            
+            <div class="form-group">
+                <label>上传文件（图片或附件）</label>
+                <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+                    <p>📤 点击上传文件</p>
+                    <input type="file" id="fileInput" onchange="uploadFile(event)">
+                </div>
+            </div>
+
+            <div id="filesContainer"></div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script>
+        const API_BASE = '';
+        let recipients = [];
+        let attachments = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMailingLists();
+        });
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+
+            if (tabName === 'lists') {
+                loadMailingLists();
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type} show`;
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        function addRecipient() {
+            const email = document.getElementById('recipientEmail').value.trim();
+            if (email && !recipients.includes(email)) {
+                recipients.push(email);
+                updateRecipientsList();
+                document.getElementById('recipientEmail').value = '';
+            }
+        }
+
+        function removeRecipient(email) {
+            recipients = recipients.filter(r => r !== email);
+            updateRecipientsList();
+        }
+
+        function updateRecipientsList() {
+            const list = document.getElementById('recipientsList');
+            list.innerHTML = recipients.map(email => `
+                <div class="recipient-tag">
+                    ${email}
+                    <button onclick="removeRecipient('${email}')">×</button>
+                </div>
+            `).join('');
+        }
+
+        function formatText(command) {
+            document.execCommand(command, false, null);
+        }
+
+        async function insertImage() {
+            const url = prompt('请输入图片 URL:');
+            if (url) {
+                document.execCommand('insertImage', false, url);
+            }
+        }
+
+        async function handleFileUpload(event) {
+            const files = event.target.files;
+            for (const file of files) {
+                attachments.push(file);
+            }
+            updateAttachmentsList();
+        }
+
+        function updateAttachmentsList() {
+            const list = document.getElementById('attachmentsList');
+            list.innerHTML = attachments.map((file, index) => `
+                <div class="file-item">
+                    <span>${file.name} (${(file.size / 1024).toFixed(2)} KB)</span>
+                    <button onclick="removeAttachment(${index})">删除</button>
+                </div>
+            `).join('');
+        }
+
+        function removeAttachment(index) {
+            attachments.splice(index, 1);
+            updateAttachmentsList();
+        }
+
+        async function sendEmail() {
+            const subject = document.getElementById('subject').value;
+            const htmlBody = document.getElementById('editor').innerHTML;
+            const fromEmail = document.getElementById('fromEmail').value;
+            const mailingListId = document.getElementById('mailingListSelect').value;
+
+            if (recipients.length === 0 && !mailingListId) {
+                showNotification('请添加收件人或选择邮件列表', 'error');
+                return;
+            }
+
+            if (!subject) {
+                showNotification('请输入邮件主题', 'error');
+                return;
+            }
+
+            if (!htmlBody) {
+                showNotification('请输入邮件内容', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: recipients.map(email => ({ email })),
+                        subject,
+                        htmlBody,
+                        from: fromEmail ? { email: fromEmail } : undefined,
+                        mailingListId: mailingListId || undefined
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('邮件发送成功！');
+                    // Clear form
+                    recipients = [];
+                    attachments = [];
+                    document.getElementById('subject').value = '';
+                    document.getElementById('editor').innerHTML = '';
+                    document.getElementById('fromEmail').value = '';
+                    updateRecipientsList();
+                    updateAttachmentsList();
+                } else {
+                    showNotification(data.error || '发送失败', 'error');
+                }
+            } catch (error) {
+                showNotification('发送失败: ' + error.message, 'error');
+            }
+        }
+
+        async function loadMailingLists() {
+            try {
+                const response = await fetch(`${API_BASE}/api/lists`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const select = document.getElementById('mailingListSelect');
+                    select.innerHTML = '<option value="">-- 选择邮件列表或手动输入收件人 --</option>' +
+                        data.lists.map(list => `
+                            <option value="${list.id}">${list.name} (${list.emails.length} 个邮箱)</option>
+                        `).join('');
+
+                    const container = document.getElementById('mailingListsContainer');
+                    container.innerHTML = data.lists.map(list => `
+                        <div class="list-item">
+                            <div>
+                                <strong>${list.name}</strong>
+                                <p style="color: #666; margin-top: 5px;">${list.description || ''}</p>
+                                <p style="color: #999; font-size: 12px; margin-top: 5px;">
+                                    ${list.emails.length} 个邮箱 | 创建于 ${new Date(list.created_at).toLocaleDateString()}
+                                </p>
+                            </div>
+                            <div class="list-item-actions">
+                                <button class="btn-edit" onclick="viewList('${list.id}')">查看</button>
+                                <button class="btn-delete" onclick="deleteList('${list.id}')">删除</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                showNotification('加载列表失败: ' + error.message, 'error');
+            }
+        }
+
+        async function createList() {
+            const name = document.getElementById('newListName').value;
+            const description = document.getElementById('newListDesc').value;
+
+            if (!name) {
+                showNotification('请输入列表名称', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/lists`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('列表创建成功！');
+                    document.getElementById('newListName').value = '';
+                    document.getElementById('newListDesc').value = '';
+                    loadMailingLists();
+                } else {
+                    showNotification(data.error || '创建失败', 'error');
+                }
+            } catch (error) {
+                showNotification('创建失败: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteList(id) {
+            if (!confirm('确定要删除这个邮件列表吗？')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/lists/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('列表删除成功！');
+                    loadMailingLists();
+                } else {
+                    showNotification(data.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showNotification('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        function viewList(id) {
+            alert('列表详情功能待实现 - ID: ' + id);
+        }
+
+        async function uploadFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/api/files`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('文件上传成功！');
+                } else {
+                    showNotification(data.error || '上传失败', 'error');
+                }
+            } catch (error) {
+                showNotification('上传失败: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
