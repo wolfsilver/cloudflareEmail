@@ -8,27 +8,36 @@ export class Database {
 
   async initialize() {
     // Create mailing lists table
-    await this.db.exec(`
-      CREATE TABLE IF NOT EXISTS mailing_lists (
+    await this.db
+      .prepare(`CREATE TABLE IF NOT EXISTS mailing_lists (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
-      )
-    `);
+      )`)
+      .run();
 
     // Create mailing list emails table
-    await this.db.exec(`
-      CREATE TABLE IF NOT EXISTS mailing_list_emails (
+    await this.db
+      .prepare(`CREATE TABLE IF NOT EXISTS mailing_list_emails (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         list_id TEXT NOT NULL,
         email TEXT NOT NULL,
         name TEXT,
         FOREIGN KEY (list_id) REFERENCES mailing_lists(id) ON DELETE CASCADE,
         UNIQUE(list_id, email)
-      )
-    `);
+      )`)
+      .run();
+
+    // Create indexes
+    await this.db
+      .prepare('CREATE INDEX IF NOT EXISTS idx_mailing_list_emails_list_id ON mailing_list_emails(list_id)')
+      .run();
+
+    await this.db
+      .prepare('CREATE INDEX IF NOT EXISTS idx_mailing_list_emails_email ON mailing_list_emails(email)')
+      .run();
   }
 
   async createMailingList(name: string, description?: string): Promise<MailingList> {
