@@ -1,6 +1,10 @@
 name = "cloudflare-email-worker"
 main = "src/index.ts"
-compatibility_date = "2024-01-01"
+compatibility_date = "2025-06-01"
+
+# Assets configuration for static files
+[assets]
+directory = "./public"
 
 # R2 bucket bindings for attachments and images
 [[r2_buckets]]
