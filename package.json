@@ -1,0 +1,29 @@
+{
+  "name": "cloudflare-email-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for sending emails with mailing list support",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest",
+    "build": "wrangler deploy --dry-run"
+  },
+  "keywords": [
+    "cloudflare",
+    "worker",
+    "email",
+    "r2"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241022.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^3.80.0",
+    "vitest": "^1.0.4"
+  },
+  "dependencies": {
+    "hono": "^3.12.0"
+  }
+}

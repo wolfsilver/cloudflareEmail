@@ -1,0 +1,11 @@
+# Example environment variables for local development
+# Copy this file to .dev.vars and update with your values
+
+# Cloudflare Account ID
+CLOUDFLARE_ACCOUNT_ID=your-account-id
+
+# API Token (if needed)
+CLOUDFLARE_API_TOKEN=your-api-token
+
+# Environment
+ENVIRONMENT=development

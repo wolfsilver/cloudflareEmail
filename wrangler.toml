@@ -1,0 +1,23 @@
+name = "cloudflare-email-worker"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# R2 bucket bindings for attachments and images
+[[r2_buckets]]
+binding = "EMAIL_ATTACHMENTS"
+bucket_name = "email-attachments"
+
+# D1 database for mailing lists
+[[d1_databases]]
+binding = "DB"
+database_name = "email_database"
+database_id = "your-database-id"
+
+# Email binding for sending emails
+send_email = [
+  {name = "SEB", destination_address = "verified@example.com"}
+]
+
+[vars]
+# Environment variables
+ALLOWED_ORIGINS = "*"
