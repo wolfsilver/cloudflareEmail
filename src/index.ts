@@ -13,15 +13,23 @@ const app = new Hono<{ Bindings: Env }>();
 // Enable CORS
 app.use('/*', cors());
 
-// Serve the Web UI
+// Serve the Web UI from public/index.html
+// With [assets] configuration in wrangler.toml, static files are served automatically
+// The root path will serve index.html from the public directory
 app.get('/', async (c) => {
-  // In production, you would serve the HTML file from the worker's assets
-  // For now, redirect to a simple status page
+  // When assets are configured, Cloudflare Workers will automatically serve
+  // index.html from the public directory for the root path
+  // This handler may not be reached in production with assets enabled
+  return c.redirect('/index.html');
+});
+
+// Status page
+app.get('/status', async (c) => {
   return c.html(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Cloudflare Email Worker</title>
+      <title>Cloudflare Email Worker - Status</title>
       <style>
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -62,6 +70,7 @@ app.get('/', async (c) => {
         <p>Email sending system with mailing lists, rich text, and R2 storage</p>
         <div class="status">✅ API is running</div>
         <div class="links">
+          <a href="/">Web UI</a>
           <a href="/api">API Status</a>
           <a href="https://github.com/wolfsilver/cloudflareEmail">Documentation</a>
         </div>
